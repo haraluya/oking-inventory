@@ -12,18 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # ===============================================================
-      # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-      # 這就是我們新增的關鍵步驟，它會先安裝 Node.js v18
-      # 這樣後續的 npm 指令才能被正確執行
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+      
+      # ===============================================================
+      # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+      # 我們將安裝指令從 npm ci 改為 npm install，這通常更穩定
+      - run: npm install && npm run build
       # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
       # ===============================================================
 
-      - run: npm ci && npm run build
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
