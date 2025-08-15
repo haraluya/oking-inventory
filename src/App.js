@@ -1,32 +1,13 @@
 import React, { useState, useEffect, useMemo, createContext, useContext, useRef, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, runTransaction, query, where, orderBy, serverTimestamp, getDocs, writeBatch } from 'firebase/firestore';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Home, Package, ShoppingCart, DollarSign, FileText, PlusCircle, Edit, Trash2, AlertCircle, ChevronDown, ChevronRight, UserCheck, LogOut, Truck, Printer, ClipboardList, Users, FolderKanban, History, CheckCircle, Archive, Building } from 'lucide-react';
-
-// --- Firebase Configuration ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-    ? JSON.parse(__firebase_config) 
-    : {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_AUTH_DOMAIN",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_STORAGE_BUCKET",
-        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-        appId: "YOUR_APP_ID"
-      };
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, runTransaction, query, where, orderBy, serverTimestamp, getDocs, writeBatch } from 'firebase/firestore';
+import { Home, Package, ShoppingCart, DollarSign, FileText, PlusCircle, Edit, Trash2, AlertCircle, ChevronDown, ChevronRight, Truck, Printer, ClipboardList, Users, FolderKanban, CheckCircle, Archive, Building } from 'lucide-react';
+import app, { auth, db } from './firebaseConfig.js';
 
 // --- App & Firebase Initialization ---
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-let app, auth, db;
-try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-} catch (error) {
-    console.error("Firebase 初始化失敗:", error);
-}
+// Firebase 已在 firebaseConfig.js 中初始化
+// 我們現在直接匯入已初始化的 'app', 'auth', 和 'db' 服務
+const appId = app.options.appId;
 
 // --- Collection Path Helpers ---
 const getCollectionPath = (collectionName) => `artifacts/${appId}/public/data/${collectionName}`;
@@ -99,13 +80,9 @@ const AuthProvider = ({ children }) => {
                 setUser(currentUser); setLoading(false);
             } else {
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+                    await signInAnonymously(auth);
                 } catch (error) {
-                    console.error("Firebase 登入失敗:", error); setLoading(false);
+                    console.error("Firebase 匿名登入失敗:", error); setLoading(false);
                 }
             }
         });
@@ -1303,7 +1280,7 @@ const Reports = () => {
         return () => unsub();
     }, [user]);
 
-    const filterOrdersByDate = (orders) => {
+    const filterOrdersByDate = useCallback((orders) => {
         const start = new Date(startDate);
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
@@ -1311,19 +1288,16 @@ const Reports = () => {
             const orderDate = order.createdAt.toDate();
             return orderDate >= start && orderDate <= end;
         });
-    };
+    }, [startDate, endDate]);
     
     useEffect(() => {
         const filteredSales = filterOrdersByDate(sales);
         const totalRevenue = filteredSales.reduce((sum, order) => sum + order.totalAmount, 0);
-        const totalCogs = filteredSales.reduce((sum, order) => {
-            const orderCogs = order.items.reduce((itemSum, item) => itemSum + (item.costAtSale || 0) * item.quantity, 0);
-            return sum + orderCogs;
-        }, 0);
+        const totalCogs = filteredSales.reduce((sum, order) => sum + (order.items.reduce((itemSum, item) => itemSum + (item.costAtSale || 0) * item.quantity, 0)), 0);
         const grossProfit = totalRevenue - totalCogs;
         const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
         setPerformanceData({ totalRevenue, totalCogs, grossProfit, profitMargin });
-    }, [sales, startDate, endDate]);
+    }, [sales, filterOrdersByDate]);
 
     const handleGenerateStatement = () => {
         if (!selectedCustomer) { showMessage('請選擇一位客戶。', 'error'); return; }
@@ -1416,7 +1390,9 @@ const WarehouseShippingManagement = () => {
 
         try {
             await runTransaction(db, async (transaction) => {
-                let orderNumber = order.orderNumber;
+                const orderNumber = order.orderNumber;
+                const updatedItems = [];
+
                 for (const item of order.items) {
                     const productRef = doc(db, getDocPath('products', item.productId));
                     const productDoc = await transaction.get(productRef);
@@ -1426,6 +1402,12 @@ const WarehouseShippingManagement = () => {
                     const newStock = productData.stock - item.quantity;
                     transaction.update(productRef, { stock: newStock });
 
+                    // 將當時的平均成本記錄到品項中
+                    updatedItems.push({
+                        ...item,
+                        costAtSale: productData.averageCost || 0
+                    });
+
                     const invLogRef = doc(collection(db, getCollectionPath('inventoryLogs')));
                     transaction.set(invLogRef, {
                         productId: item.productId, productName: item.name, type: 'out', change: -item.quantity, newStock: newStock,
@@ -1433,7 +1415,8 @@ const WarehouseShippingManagement = () => {
                     });
                 }
                 const orderRef = doc(db, getDocPath('salesOrders', order.id));
-                transaction.update(orderRef, { status: 'Completed', shippedAt: serverTimestamp() });
+                // 更新訂單狀態，並將帶有銷售成本的品項陣列存回
+                transaction.update(orderRef, { status: 'Completed', shippedAt: serverTimestamp(), items: updatedItems });
             });
             showMessage('訂單已出貨，庫存已更新！');
             setSelectedOrder(null);
