@@ -23,8 +23,10 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Create Firebase config file
-        run: echo "${{ secrets.FIREBASE_CONFIG_JS }}" > src/firebaseConfig.js
+      - name: Create Firebase config file from secret
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG_JS }}
+        run: printf '%s\n' "$FIREBASE_CONFIG" > src/firebaseConfig.js
 
       - name: Build
         run: npm run build
