@@ -119,69 +119,6 @@ const InventorySystem = () => {
     const [currentView, setCurrentView] = useState('dashboard');
 
     useEffect(() => {
-        const seedData = async () => {
-            if (!user) return;
-
-            const collectionsToCheck = ['products', 'customers', 'suppliers'];
-            let needsSeeding = false;
-
-            for (const coll of collectionsToCheck) {
-                const collectionRef = collection(db, getCollectionPath(coll));
-                const snapshot = await getDocs(query(collectionRef));
-                if (snapshot.empty) {
-                    needsSeeding = true;
-                    break;
-                }
-            }
-
-            if (needsSeeding) {
-                console.log("資料庫為空，正在新增測試資料...");
-                const batch = writeBatch(db);
-
-                // Suppliers
-                const suppliersData = [
-                    { code: 'SUP-001', name: '大同電子' },
-                    { code: 'SUP-002', name: '聲寶集團' },
-                    { code: 'SUP-003', name: '宏碁電腦' }
-                ];
-                suppliersData.forEach(data => {
-                    const ref = doc(collection(db, getCollectionPath('suppliers')));
-                    batch.set(ref, data);
-                });
-
-                // Customers
-                const customersData = [
-                    { code: 'CUS-001', name: '全國電子', tier: 'gold' },
-                    { code: 'CUS-002', name: '燦坤3C', tier: 'silver' },
-                    { code: 'CUS-003', name: '順發電腦', tier: 'bronze' },
-                    { code: 'CUS-004', name: '網路散客', tier: 'retail' }
-                ];
-                customersData.forEach(data => {
-                    const ref = doc(collection(db, getCollectionPath('customers')));
-                    batch.set(ref, data);
-                });
-
-                // Products
-                const productsData = [
-                    { sku: 'TATUNG-TAC-11R', brand: '大同', name: '電鍋', spec: '11人份/不鏽鋼', description: '百年經典，國民電鍋', lowStockThreshold: 10, price_retail: 2890, price_bronze: 2800, price_silver: 2750, price_gold: 2700, stock: 0, averageCost: 0, cost: 0, createdAt: new Date() },
-                    { sku: 'SAMPO-ES-B10F', brand: '聲寶', name: '定頻洗衣機', spec: '10KG', description: '強力洗淨，節能省水', lowStockThreshold: 5, price_retail: 8490, price_bronze: 8300, price_silver: 8200, price_gold: 8000, stock: 0, averageCost: 0, cost: 0, createdAt: new Date() },
-                    { sku: 'ACER-AN515', brand: 'Acer', name: 'Nitro 5 電競筆電', spec: 'i5-12500H/16G/512G/RTX3050', description: '入門電競首選，高效散熱', lowStockThreshold: 3, price_retail: 32900, price_bronze: 32000, price_silver: 31500, price_gold: 31000, stock: 0, averageCost: 0, cost: 0, createdAt: new Date() }
-                ];
-                productsData.forEach(data => {
-                    const ref = doc(collection(db, getCollectionPath('products')));
-                    batch.set(ref, data);
-                });
-
-                await batch.commit();
-                console.log("測試資料新增完成！");
-            }
-        };
-
-        seedData();
-    }, [user]);
-
-
-    useEffect(() => {
         const availableViews = getAvailableViews(role);
         const flatViews = availableViews.flatMap(v => v.children ? v.children : v);
         if (!flatViews.find(v => v.id === currentView)) {
